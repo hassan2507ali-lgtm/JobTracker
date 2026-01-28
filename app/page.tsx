@@ -1,7 +1,9 @@
 "use client"
+import JobChart from "@/app/JobChart" 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import AddJobDialog from "@/components/AddJobDialog"
+import EditJobDialog from "@/components/EditJobDialog"
 import {
   Table,
   TableBody,
@@ -19,7 +21,8 @@ import {
   SelectValue 
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Trash2 } from "lucide-react"
+import { Input } from "@/components/ui/input" // <-- BARU: Import Input
+import { Trash2, Search } from "lucide-react" // <-- BARU: Import Ikon Search
 
 type Application = {
   id: string
@@ -33,6 +36,7 @@ type Application = {
 export default function Home() {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("") // <-- BARU: State untuk pencarian
 
   // 1. Ambil Data
   const fetchApplications = async () => {
@@ -55,11 +59,7 @@ export default function Home() {
   // 2. Fungsi Hapus Data
   const handleDelete = async (id: string) => {
     if(!confirm("Yakin mau hapus data ini?")) return;
-
-    // Hapus dari layar dulu (Optimistic UI)
     setApplications(apps => apps.filter(app => app.id !== id))
-
-    // Hapus dari database
     const { error } = await supabase.from('applications').delete().eq('id', id)
     if (error) {
       alert("Gagal menghapus!")
@@ -69,12 +69,9 @@ export default function Home() {
 
   // 3. Fungsi Update Status
   const handleStatusChange = async (id: string, newStatus: string) => {
-    // Update di layar dulu
     setApplications(apps => 
       apps.map(app => app.id === id ? { ...app, status: newStatus } : app)
     )
-
-    // Update ke database
     const { error } = await supabase
       .from('applications')
       .update({ status: newStatus })
@@ -86,11 +83,17 @@ export default function Home() {
     }
   }
 
-  // Warna Status (Termasuk Ungu Progress buatanmu)
+  // 4. LOGIKA FILTER PENCARIAN (BARU) 🔍
+  // Kita filter data 'applications' berdasarkan apa yang diketik di 'search'
+  const filteredApplications = applications.filter((app) => 
+    app.company_name.toLowerCase().includes(search.toLowerCase()) || 
+    app.role.toLowerCase().includes(search.toLowerCase())
+  )
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'applied': return 'text-blue-600 font-medium'
-      case 'progress': return 'text-purple-600 font-bold' // <-- Ungu
+      case 'progress': return 'text-purple-600 font-bold'
       case 'interview': return 'text-yellow-600 font-bold'
       case 'rejected': return 'text-red-600 font-medium'
       case 'offering': return 'text-green-600 font-bold'
@@ -110,40 +113,64 @@ export default function Home() {
         <AddJobDialog onJobAdded={fetchApplications} />
       </div>
 
-      {/* Ringkasan Dashboard (Ada 4 Kartu) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Lamaran</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-bold">{applications.length}</div></CardContent>
-        </Card>
+      {/* Ringkasan Dashboard */}
+    {/* Layout Atas: Kiri Kartu, Kanan Grafik (BARU) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* Kartu Progress Baru Kamu */}
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Dalam Proses</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-600">
-              {applications.filter(app => app.status === 'progress').length}
-            </div>
+        {/* Kolom Kiri: Kartu Ringkasan (Lebar 2 kolom) */}
+        <div className="md:col-span-2 grid grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Lamaran</CardTitle></CardHeader>
+            <CardContent><div className="text-4xl font-bold">{applications.length}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Dalam Proses</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-purple-600">
+                {applications.filter(app => app.status === 'progress').length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Interview</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-yellow-600">
+                {applications.filter(app => app.status === 'interview').length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Ditolak</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-red-600">
+                {applications.filter(app => app.status === 'rejected').length}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Kolom Kanan: Grafik (Lebar 1 kolom) */}
+        <Card className="flex flex-col items-center justify-center">
+          <CardHeader>
+            <CardTitle className="text-sm text-gray-500 mb-[-20px]">Distribusi Status</CardTitle>
+          </CardHeader>
+          <CardContent className="w-full">
+            {/* Panggil Komponen Grafik Disini */}
+            <JobChart applications={applications} />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Interview</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-yellow-600">
-              {applications.filter(app => app.status === 'interview').length}
-            </div>
-          </CardContent>
-        </Card>
+      </div>
 
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Ditolak</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">
-              {applications.filter(app => app.status === 'rejected').length}
-            </div>
-          </CardContent>
-        </Card>
+      {/* SEARCH BAR (BARU) 🔍 */}
+      <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm max-w-sm">
+        <Search className="w-4 h-4 text-gray-500" />
+        <Input 
+          placeholder="Cari perusahaan atau posisi..." 
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border-none shadow-none focus-visible:ring-0"
+        />
       </div>
 
       {/* Tabel Utama */}
@@ -165,14 +192,14 @@ export default function Home() {
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">Memuat data...</TableCell>
                 </TableRow>
-              ) : applications.length === 0 ? (
+              ) : filteredApplications.length === 0 ? (  // <-- Ubah jadi filteredApplications
                 <TableRow>
                   <TableCell colSpan={6} className="h-32 text-center text-gray-500">
-                    Belum ada data.
+                    {search ? "Pencarian tidak ditemukan 😢" : "Belum ada data."}
                   </TableCell>
                 </TableRow>
               ) : (
-                applications.map((app) => (
+                filteredApplications.map((app) => ( // <-- Ubah jadi filteredApplications
                   <TableRow key={app.id} className="hover:bg-gray-50 transition-colors">
                     <TableCell className="font-bold text-gray-900">{app.company_name}</TableCell>
                     <TableCell>{app.role}</TableCell>
@@ -182,8 +209,6 @@ export default function Home() {
                       </span>
                     </TableCell>
                     <TableCell className="text-gray-500 text-sm">{app.date_applied}</TableCell>
-                    
-                    {/* Kolom Status (Dropdown) */}
                     <TableCell>
                       <Select 
                         defaultValue={app.status} 
@@ -201,17 +226,21 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-
-                    {/* Kolom Hapus */}
                     <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(app.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        {/* Tombol Edit Baru */}
+                        <EditJobDialog application={app} onJobUpdated={fetchApplications} />
+                        
+                        {/* Tombol Hapus Lama */}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(app.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
